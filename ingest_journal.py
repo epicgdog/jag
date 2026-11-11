@@ -19,6 +19,7 @@ def main(argv=None):
     parser.add_argument('--dry-run', action='store_true')
     args = parser.parse_args(argv)
     start = time.monotonic()
+    model = storage = None
     try:
         model, storage = clients(args.dry_run)
         status, count = ingest(args.reference, os.getenv('OBSIDIAN_JOURNAL_DIR', DEFAULT_ROOT), model, storage, args.date)
@@ -28,5 +29,8 @@ def main(argv=None):
         print(f'failed code={error.args[0]}', file=sys.stderr)
     except Exception:
         print('failed code=unexpected_error', file=sys.stderr)
+    finally:
+        if model: model.client.close()
+        if storage: storage.client.close()
     return 1
 if __name__ == '__main__': raise SystemExit(main())

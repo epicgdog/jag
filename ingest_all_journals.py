@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 from ingest_journal import SafeParser
 from journal.obsidian import JournalError
-from journal.pipeline import DEFAULT_ROOT, clients, ingest
+from journal.pipeline import DEFAULT_ROOT, clients, ingest, load_config
 
 SHARED = {'model_unavailable', 'model_redirect', 'storage_unavailable', 'storage_configuration', 'invalid_model_endpoint'}
 
@@ -35,6 +35,9 @@ def run(root, paths, model, storage, output=print):
             if status == 'skipped': skipped += 1
             else: succeeded += 1
             output(f'{index}/{total} {status} tasks={count} seconds={time.monotonic()-start:.2f}')
+        except KeyboardInterrupt:
+            output(f'{index}/{total} interrupted')
+            break
         except JournalError as error:
             failed += 1
             output(f'{index}/{total} failed code={error.args[0]} seconds={time.monotonic()-start:.2f}')
@@ -50,11 +53,14 @@ def run(root, paths, model, storage, output=print):
 
 def main(argv=None):
     parser=SafeParser(description=__doc__)
-    parser.add_argument('--directory', default=os.getenv('OBSIDIAN_JOURNAL_DIR',DEFAULT_ROOT))
+    parser.add_argument('--directory')
     parser.add_argument('--dry-run',action='store_true')
     args=parser.parse_args(argv)
+    model = storage = None
     try:
-        root, paths=discover(args.directory)
+        load_config()
+        root, paths=discover(args.directory or os.getenv('OBSIDIAN_JOURNAL_DIR',DEFAULT_ROOT))
+        if not paths: return run(root, paths, None, None)
         model, storage=clients(args.dry_run)
         return run(root,paths,model,storage)
     except KeyboardInterrupt:
@@ -63,5 +69,8 @@ def main(argv=None):
         print(f'failed code={error.args[0]}',file=sys.stderr)
     except Exception:
         print('failed code=unexpected_error',file=sys.stderr)
+    finally:
+        if model: model.client.close()
+        if storage: storage.client.close()
     return 1
 if __name__ == '__main__': raise SystemExit(main())

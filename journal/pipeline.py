@@ -25,10 +25,16 @@ def load_config():
 def clients(dry_run):
     load_config()
     model = LocalModel(os.getenv('LM_STUDIO_BASE_URL', 'http://localhost:1234/v1'))
-    model.ready()
-    storage = None if dry_run else Storage(os.getenv('SUPABASE_URL'), os.getenv('SUPABASE_SERVICE_ROLE_KEY') or os.getenv('SUPABASE_SECRET_KEY'))
-    if storage: storage.ready()
-    return model, storage
+    storage = None
+    try:
+        model.ready()
+        storage = None if dry_run else Storage(os.getenv('SUPABASE_URL'), os.getenv('SUPABASE_SERVICE_ROLE_KEY') or os.getenv('SUPABASE_SECRET_KEY'))
+        if storage: storage.ready()
+        return model, storage
+    except BaseException:
+        model.client.close()
+        if storage: storage.client.close()
+        raise
 
 def ingest(path, root, model, storage=None, override=None):
     # Resolve first so aliases share a lock; no document text is sent before locking.
