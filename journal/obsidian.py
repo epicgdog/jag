@@ -36,7 +36,11 @@ def resolve_date(candidates, override=None):
     return dates.pop().isoformat()
 
 def marked_dates(body):
-    return re.findall(r'(?im)^\s*(?:#{1,6}\s*)?(?:journal[ -]date|date)\s*:\s*(\S+)\s*$', body)
+    dates = []
+    for token in MarkdownIt().parse(body):
+        if token.type == 'inline':
+            dates.extend(re.findall(r'(?im)^\s*(?:journal[ -]date|date)\s*:\s*(\S+)\s*$', token.content))
+    return dates
 
 def split_frontmatter(text):
     if not re.match(r'^---\s*\r?\n', text):
@@ -100,6 +104,8 @@ def read_obsidian(path, root, override=None):
     except (OSError, UnicodeError, RuntimeError, ValueError):
         raise JournalError('read_failed') from None
     front, body = split_frontmatter(text)
+    if not body.strip():
+        return {'source': 'obsidian', 'id': str(path), 'content': body, 'tasks': [], 'empty': True}
     candidates = []
     if 'date' in front:
         candidates.append(front['date'])

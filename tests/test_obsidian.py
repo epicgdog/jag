@@ -30,3 +30,14 @@ class ObsidianTests(unittest.TestCase):
             outside = Path(tmp) / 'outside.md'; outside.write_text('')
             (root / 'escape.md').symlink_to(outside)
             with self.assertRaises(JournalError): read_obsidian(root / 'escape.md', root)
+
+    def test_code_dates_and_empty(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            entry = root / '2025-01-01.md'
+            entry.write_text('Text\n\n```\nDate: 2020-01-01\n```\n\n    Date: 2019-01-01\n')
+            self.assertEqual(read_obsidian(entry, root)['document_date'], '2025-01-01')
+            blank = root / 'blank.md'
+            for text in ('   \n', '---\ndate: 2020-01-01\n---\n  \n'):
+                blank.write_text(text)
+                self.assertTrue(read_obsidian(blank, root)['empty'])
