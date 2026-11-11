@@ -1,5 +1,6 @@
 begin;
-select plan(8);
+create extension if not exists pgtap;
+select plan(14);
 select ok(not has_function_privilege('anon','public.ingest_journal(jsonb,jsonb,jsonb)','execute'), 'anon denied');
 select ok(not has_function_privilege('authenticated','public.ingest_journal(jsonb,jsonb,jsonb)','execute'), 'authenticated denied');
 select ok(has_function_privilege('service_role','public.ingest_journal(jsonb,jsonb,jsonb)','execute'), 'service allowed');
@@ -8,5 +9,13 @@ select throws_ok($$select public.ingest_journal('{"source":"obsidian","id":"/syn
 select throws_ok($$select public.ingest_journal('{"source":"obsidian","id":"/synthetic/three.md","document_date":"2025-01-01","content":"synthetic"}', '{"summary":"synthetic","model":"synthetic","generated_at":"2025-01-01T00:00:00Z"}', '[{"id":"one","text":"synthetic","checked":false},{"id":"two","text":"","checked":true}]')$$, 'P0001', 'invalid tasks', 'bad child rejected');
 select is((select count(*)::integer from public.document where id in ('/synthetic/two.md','/synthetic/three.md')), 0, 'failed parents absent');
 select is((select count(*)::integer from public.todo where document_id in ('/synthetic/two.md','/synthetic/three.md')), 0, 'failed children absent');
+-- Force a failure after parent, summary and the first task have been written.
+alter table public.todo add constraint synthetic_reject_second check (id <> 'reject-second');
+select throws_ok($$select public.ingest_journal('{"source":"obsidian","id":"/synthetic/rollback.md","document_date":"2025-01-01","content":"new"}', '{"summary":"new","model":"synthetic","generated_at":"2025-01-01T00:00:00Z"}', '[{"id":"first","text":"synthetic","checked":false},{"id":"reject-second","text":"synthetic","checked":false}]')$$, '23514', null, 'new import fails during second task');
+select is((select count(*)::integer from public.document where id='/synthetic/rollback.md'),0,'new parent rolled back');
+select is((select count(*)::integer from public.document_summary where document_id='/synthetic/rollback.md'),0,'new summary rolled back');
+select is((select count(*)::integer from public.todo where document_id='/synthetic/rollback.md'),0,'first task rolled back');
+select throws_ok($$select public.ingest_journal('{"source":"obsidian","id":"/synthetic/one.md","document_date":"2025-01-01","content":"changed"}', '{"summary":"changed","model":"synthetic","generated_at":"2025-01-01T00:00:00Z"}', '[{"id":"first","text":"synthetic","checked":false},{"id":"reject-second","text":"synthetic","checked":false}]')$$, '23514', null, 'existing import fails during second task');
+select ok((select content='synthetic' from public.document where id='/synthetic/one.md') and (select summary='synthetic' from public.document_summary where document_id='/synthetic/one.md') and not exists(select 1 from public.todo where document_id='/synthetic/one.md' and id='first'), 'existing rows preserved');
 select * from finish();
 rollback;
