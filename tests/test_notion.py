@@ -40,3 +40,17 @@ class NotionTests(unittest.TestCase):
         store=Store(); store.save(doc,Model().summarize(doc['document_date'],doc['content']))
         self.assertEqual(len(store.docs),1)
         self.assertTrue(store.docs[doc['id']][0]['tasks'][0]['checked'])
+    def test_sdk_error_logging_is_silent(self):
+        import contextlib, io, logging
+        import httpx
+        from notion_client import Client
+        from unittest.mock import patch
+        from journal.notion import ingest_notion
+        sentinel='PRIVATE_SYNTHETIC_SENTINEL'
+        def factory(**kwargs):
+            transport=httpx.MockTransport(lambda req:httpx.Response(400,json={'object':'error','status':400,'code':'validation_error','message':sentinel}))
+            return Client(client=httpx.Client(transport=transport), **kwargs)
+        out=io.StringIO()
+        with patch.dict('os.environ',{'NOTION_API_KEY':'synthetic'}), patch('notion_client.Client',side_effect=factory), contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+            with self.assertRaises(JournalError): ingest_notion('12345678123412341234123456789abc',None)
+        self.assertNotIn(sentinel,out.getvalue())

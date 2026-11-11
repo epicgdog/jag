@@ -62,6 +62,7 @@ def snapshot(client, reference, date_property=None, override=None):
 def ingest_notion(reference, model, storage=None, date_property=None, override=None):
     import fcntl
     import hashlib
+    import logging
     import os
     import tempfile
     from pathlib import Path
@@ -75,7 +76,10 @@ def ingest_notion(reference, model, storage=None, date_property=None, override=N
         with lockpath.open('a') as lock:
             try: fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
             except BlockingIOError: raise JournalError('already_running') from None
-            with Client(auth=token, notion_version=os.getenv('NOTION_API_VERSION',DEFAULT_API_VERSION)) as client:
+            logger = logging.Logger('jag.notion.quiet')
+            logger.disabled = True
+            logger.propagate = False
+            with Client(auth=token, notion_version=os.getenv('NOTION_API_VERSION',DEFAULT_API_VERSION), logger=logger) as client:
                 doc=snapshot(client,page_id,date_property,override)
             if doc.get('empty'): return 'skipped',0
             summary=model.summarize(doc['document_date'],doc['content'])
