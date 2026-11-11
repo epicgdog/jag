@@ -1,0 +1,12 @@
+begin;
+select plan(8);
+select ok(not has_function_privilege('anon','public.ingest_journal(jsonb,jsonb,jsonb)','execute'), 'anon denied');
+select ok(not has_function_privilege('authenticated','public.ingest_journal(jsonb,jsonb,jsonb)','execute'), 'authenticated denied');
+select ok(has_function_privilege('service_role','public.ingest_journal(jsonb,jsonb,jsonb)','execute'), 'service allowed');
+select lives_ok($$select public.ingest_journal('{"source":"obsidian","id":"/synthetic/one.md","document_date":"2025-01-01","content":"synthetic"}', '{"summary":"synthetic","model":"synthetic","generated_at":"2025-01-01T00:00:00Z"}', '[{"id":"one","text":"synthetic","checked":false}]')$$, 'valid import');
+select throws_ok($$select public.ingest_journal('{"source":"obsidian","id":"/synthetic/two.md","document_date":"2025-01-01","content":"synthetic"}', '{"summary":"synthetic","model":"synthetic","generated_at":"2025-01-01T00:00:00Z"}', '[{"id":"one","text":"synthetic","checked":false},{"id":"one","text":"synthetic","checked":true}]')$$, 'P0001', 'invalid tasks', 'duplicate rejected');
+select throws_ok($$select public.ingest_journal('{"source":"obsidian","id":"/synthetic/three.md","document_date":"2025-01-01","content":"synthetic"}', '{"summary":"synthetic","model":"synthetic","generated_at":"2025-01-01T00:00:00Z"}', '[{"id":"one","text":"synthetic","checked":false},{"id":"two","text":"","checked":true}]')$$, 'P0001', 'invalid tasks', 'bad child rejected');
+select is((select count(*)::integer from public.document where id in ('/synthetic/two.md','/synthetic/three.md')), 0, 'failed parents absent');
+select is((select count(*)::integer from public.todo where document_id in ('/synthetic/two.md','/synthetic/three.md')), 0, 'failed children absent');
+select * from finish();
+rollback;
