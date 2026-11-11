@@ -13,16 +13,22 @@ class SafeParser(argparse.ArgumentParser):
 
 def main(argv=None):
     parser = SafeParser(description=__doc__)
-    parser.add_argument('source', choices=['obsidian'])
+    parser.add_argument('source', choices=['obsidian', 'notion'])
     parser.add_argument('reference')
     parser.add_argument('--date')
+    parser.add_argument('--date-property')
     parser.add_argument('--dry-run', action='store_true')
     args = parser.parse_args(argv)
     start = time.monotonic()
     model = storage = None
     try:
         model, storage = clients(args.dry_run)
-        status, count = ingest(args.reference, os.getenv('OBSIDIAN_JOURNAL_DIR', DEFAULT_ROOT), model, storage, args.date)
+        if args.source == 'obsidian':
+            if args.date_property: raise JournalError('invalid_arguments')
+            status, count = ingest(args.reference, os.getenv('OBSIDIAN_JOURNAL_DIR', DEFAULT_ROOT), model, storage, args.date)
+        else:
+            from journal.notion import ingest_notion
+            status, count = ingest_notion(args.reference, model, storage, args.date_property, args.date)
         print(f'{status} tasks={count} seconds={time.monotonic()-start:.2f}')
         return 0
     except JournalError as error:
