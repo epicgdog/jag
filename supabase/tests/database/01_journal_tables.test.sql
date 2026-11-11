@@ -1,0 +1,35 @@
+begin;
+create extension if not exists pgtap with schema extensions;
+select plan(22);
+insert into public.document (source,id,document_date) values
+ ('obsidian','/synthetic/one.md','2024-01-01'),
+ ('notion','12345678-1234-1234-1234-123456789abc','2024-01-01');
+select is((select count(*) from public.document where document_date = '2024-01-01'), 2::bigint, 'same date accepted');
+select throws_ok($$insert into public.document values ('other','x','2024-01-01')$$, '23514', null, 'invalid source rejected');
+select throws_ok($$insert into public.document (source,id,document_date) values ('obsidian','relative','2024-01-01')$$, '23514', null, 'relative path rejected');
+select throws_ok($$insert into public.document (source,id,document_date) values ('notion','ABC','2024-01-01')$$, '23514', null, 'malformed notion ID rejected');
+select throws_ok($$insert into public.document (source,id) values ('obsidian','/synthetic/no-date')$$, '23502', null, 'date required');
+select throws_ok($$insert into public.document (source,id,document_date) values ('obsidian','/synthetic/one.md','2024-01-01')$$, '23505', null, 'document key unique');
+select throws_ok($$insert into public.document_summary (document_source,document_id,summary) values ('obsidian','/synthetic/missing','synthetic')$$, '23503', null, 'orphan summary rejected');
+select throws_ok($$insert into public.todo (document_source,document_id,id,text) values ('obsidian','/synthetic/missing','task','synthetic')$$, '23503', null, 'orphan task rejected');
+select throws_ok($$insert into public.document_summary (document_source,document_id,summary) values ('obsidian','/synthetic/one.md',' ')$$, '23514', null, 'blank summary rejected');
+select throws_ok($$insert into public.todo (document_source,document_id,id,text) values ('obsidian','/synthetic/one.md',' ','synthetic')$$, '23514', null, 'blank task ID rejected');
+select throws_ok($$insert into public.todo (document_source,document_id,id,text) values ('obsidian','/synthetic/one.md','task',' ')$$, '23514', null, 'blank task text rejected');
+insert into public.document_summary (document_source,document_id,summary) values ('obsidian','/synthetic/one.md','synthetic summary');
+select throws_ok($$insert into public.document_summary (document_source,document_id,summary) values ('obsidian','/synthetic/one.md','synthetic second')$$, '23505', null, 'one summary per document');
+insert into public.document_summary (document_source,document_id,summary,generated_at) values ('obsidian','/synthetic/one.md','synthetic replacement','2024-02-01') on conflict (document_source,document_id) do update set summary=excluded.summary, generated_at=excluded.generated_at;
+select is((select generated_at from public.document_summary where document_id='/synthetic/one.md'), '2024-02-01'::timestamptz, 'upsert updates generation time');
+insert into public.todo (document_source,document_id,id,text,checked) values ('obsidian','/synthetic/one.md','task','synthetic',false), ('notion','12345678-1234-1234-1234-123456789abc','task','synthetic',true);
+select is((select count(*) from public.todo where id='task'), 2::bigint, 'task ID may repeat in another document');
+select throws_ok($$insert into public.todo (document_source,document_id,id,text) values ('obsidian','/synthetic/one.md','task','synthetic')$$, '23505', null, 'task ID unique within document');
+select is((select count(*) from public.todo where checked), 1::bigint, 'checked state stored');
+update public.document set id='/synthetic/moved.md' where source='obsidian' and id='/synthetic/one.md';
+select is((select count(*) from public.document_summary where document_id='/synthetic/moved.md'), 1::bigint, 'summary key cascades');
+select is((select count(*) from public.todo where document_id='/synthetic/moved.md'), 1::bigint, 'task key cascades');
+delete from public.document where source='obsidian' and id='/synthetic/moved.md';
+select is((select count(*) from public.document_summary), 0::bigint, 'summary deletion cascades');
+select is((select count(*) from public.todo where document_source='obsidian'), 0::bigint, 'task deletion cascades');
+select throws_ok($$insert into public.document (source,id,document_date) values ('obsidian',' ','2024-01-01')$$, '23514', null, 'blank ID rejected');
+select is((select checked from public.todo where document_source='notion'), true, 'checked task remains');
+select * from finish();
+rollback;
