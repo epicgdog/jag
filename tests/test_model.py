@@ -36,7 +36,6 @@ class ModelTests(unittest.TestCase):
             ('length', '- synthetic', 'model_response_truncated'),
             ('stop', '', 'model_response_empty'),
             ('stop', '<think>PRIVATE_SENTINEL</think>', 'model_response_reasoning'),
-            ('stop', '- ' + 'PRIVATE_SENTINEL ' * 121, 'model_response_too_long'),
             ('content_filter', None, 'model_response_incomplete'),
         ]
         for finish_reason, content, expected in cases:
@@ -48,3 +47,9 @@ class ModelTests(unittest.TestCase):
                 self.assertNotIn('PRIVATE_SENTINEL', str(error.exception))
         with self.assertRaisesRegex(JournalError, '^model_invalid_response_schema$'):
             validate_summary({})
+
+    def test_complete_long_summary_is_accepted(self):
+        text = 'A synthetic event was recorded for testing. ' * 40
+        data = {'choices': [{'finish_reason': 'stop', 'message': {'content': text}}]}
+        self.assertGreater(len(validate_summary(data).split()), 120)
+        self.assertEqual(validate_summary(data), text.strip())

@@ -23,7 +23,9 @@ Run synthetic tests with `uv run python -m unittest discover -s tests`. Database
 
 Model errors are reported without response text: `model_response_truncated`
 means generation hit its limit; `model_response_reasoning` means thinking tags
-were returned; `model_response_too_long` means the summary exceeded 120 words.
+were returned. There is no hard summary word limit; complete summaries are not
+rejected because they exceed 120 words. Output-token limits in LM Studio are
+separate from the input context window and do not map directly to word counts.
 Summaries are requested and stored as one plain-text paragraph, without bullet
 points. Formatting differences do not cause failures. Empty, incomplete, invalid JSON,
 and malformed API responses have separate codes. Failed summaries are not saved.
