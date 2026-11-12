@@ -20,3 +20,10 @@ Perform Obsidian imports first and resolve failures before importing Notion. Dry
 Dates come from explicit frontmatter, complete filename/title dates, and marked `Date:` or `Journal Date:` lines. Conflicts, missing dates and invalid dates fail. A single-file `--date YYYY-MM-DD` overrides all other date candidates, including a missing Notion date property. The batch has no global date override. Summaries contain their generation timestamp, while the document owns its entry date. Files must resolve inside the configured root; hidden files and directories are excluded from batch discovery.
 
 Run synthetic tests with `uv run python -m unittest discover -s tests`. Database tests require a disposable Supabase-compatible PostgreSQL database with pgTAP available; run the SQL under `supabase/tests/database` only there. Do not use real journal data for development tests.
+
+Model errors are reported without response text: `model_response_truncated`
+means generation hit its limit; `model_response_reasoning` means thinking tags
+were returned; `model_response_too_long` means the summary exceeded 120 words;
+`model_response_format` means it did not form 1–5 bullet points. Wrapped and
+numbered bullets are accepted and normalized. Empty, incomplete, invalid JSON,
+and malformed API responses have separate codes. Failed summaries are not saved.

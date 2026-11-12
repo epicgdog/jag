@@ -14,6 +14,46 @@ Keep plans distinct from completed actions and preserve uncertainty.
 Do not infer motives, diagnoses, causes, or missing facts. Give no advice.
 Return only the summary, without a preamble, analysis, or explanation.'''
 
+
+def validate_summary(data):
+    """Validate output without exposing model text in errors."""
+    try:
+        choice = data['choices'][0]
+        message = choice['message']
+        content = message['content']
+        finish_reason = choice['finish_reason']
+    except (KeyError, IndexError, TypeError):
+        raise JournalError('model_invalid_response_schema') from None
+    if finish_reason == 'length':
+        raise JournalError('model_response_truncated')
+    if finish_reason != 'stop':
+        raise JournalError('model_response_incomplete')
+    if not isinstance(content, str):
+        raise JournalError('model_invalid_response_schema')
+    if not content.strip():
+        raise JournalError('model_response_empty')
+    if re.search(r'<\s*/?\s*(?:think|analysis)\b', content, re.I):
+        raise JournalError('model_response_reasoning')
+
+    # Count list items, not physical lines: Markdown bullets can wrap across lines.
+    bullets = []
+    for line in content.strip().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        match = re.match(r'^(?:[-*•]|\d+[.)])\s+(\S.*)$', line)
+        if match:
+            bullets.append(match.group(1))
+        elif bullets:
+            bullets[-1] += ' ' + line
+        else:
+            raise JournalError('model_response_format')
+    if not 1 <= len(bullets) <= 5:
+        raise JournalError('model_response_format')
+    if len(' '.join(bullets).split()) > 120:
+        raise JournalError('model_response_too_long')
+    return '\n'.join('- ' + bullet for bullet in bullets)
+
 def validate_endpoint(endpoint):
     p = urlsplit(endpoint)
     if p.scheme != 'http' or p.hostname != 'localhost' or p.port != 1234 or p.path.rstrip('/') != '/v1' or p.username or p.password or p.query or p.fragment:
@@ -39,7 +79,7 @@ class LocalModel:
             if response.status_code >= 400:
                 raise JournalError('model_unavailable')
             try: return response.json()
-            except ValueError: raise JournalError('model_invalid_response') from None
+            except ValueError: raise JournalError('model_invalid_response_json') from None
         raise JournalError('model_unavailable')
 
     def ready(self):
@@ -53,15 +93,4 @@ class LocalModel:
         if len((PROMPT + message).encode('utf-8')) > self.context_budget:
             raise JournalError('input_too_large')
         data = self.request('POST', '/chat/completions', json={'model': MODEL, 'messages': [{'role': 'system', 'content': PROMPT}, {'role': 'user', 'content': message}]})
-        try:
-            choice = data['choices'][0]
-            message = choice['message']
-            content = message['content']
-            if choice['finish_reason'] != 'stop' or not isinstance(content, str) or not content.strip() or re.search(r'<\s*/?\s*(?:think|analysis)\b', content, re.I):
-                raise ValueError()
-            lines = [line.strip() for line in content.strip().splitlines() if line.strip()]
-            if not 1 <= len(lines) <= 5 or any(not re.match(r'^[-*•]\s+\S', line) for line in lines) or len(content.split()) > 120:
-                raise ValueError()
-            return content.strip()
-        except (KeyError, IndexError, TypeError, ValueError):
-            raise JournalError('model_invalid_response') from None
+        return validate_summary(data)
