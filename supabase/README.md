@@ -18,19 +18,34 @@ with optional parent-date/source filters. Both RPCs are restricted to the backen
 
 Use an isolated disposable Supabase Postgres instance with pgvector, never a database containing user data. Apply all five files in `migrations/` in order, then run each `tests/database/*.test.sql` with pgTAP available (for example, `psql -v ON_ERROR_STOP=1 -f <file>`). Inspect the TAP output for failures as well as SQL errors. Tests use synthetic fixtures and roll back. Alternatively, where a separately configured local Supabase CLI environment already exists, use its database test runner after applying the migrations. No local CLI configuration is required for the SQL files.
 
-The new vector pgTAP suite has not yet been executed locally: pulling a fresh
-test image failed in the macOS Docker credential helper. Python tests use mocked
-storage and do not substitute for SQL execution. Do not run fixture SQL against
+All four SQL suites passed on November 12, 2026: 83 pgTAP checks in a fresh
+native Supabase Postgres instance containing only synthetic fixtures. All five
+migrations applied there successfully. The native runtime avoided the earlier
+Docker credential-helper problem, and the disposable stack was destroyed after
+testing. Python validation also passes (61 tests). Do not run fixture SQL against
 the hosted journal database.
 
-On November 11, 2026, authenticated Supabase CLI migration-history inspection
-confirmed that project `jag` has migrations `20261111000000`–`20261111000002`
-applied. Migration `20261111000003` remains pending. No hosted migration or
-journal-data access was performed during this check.
+## Hosted deployment
 
-## Hosted deployment, later
+The user-authorized deployment to `jag` (`YOUR_PROJECT_REF`) completed on
+November 12, 2026. CLI migration history confirmed all five migration versions
+are applied, through `20261112000000`. Schema-only checks confirmed the exact
+five vector columns, `extensions.vector(768)`, RLS, 768-dimension function checks,
+backend function grants, and denied client access. The application's backend
+readiness RPC also returned true using the existing project credentials.
+No journal rows were inspected or imported, and vault secrets/seed data were
+not modified.
 
-Review the migrations and target before applying. With the Supabase CLI authenticated and linked to the **existing** intended project, run `supabase db push` from the repository root after configuring the CLI for that project. Alternatively, use the CLI's documented database connection workflow. API URL and API keys alone do not authorize migration deployment. This milestone does not apply hosted changes.
+For future authorized deployments, authenticate the CLI or supply
+`SUPABASE_ACCESS_TOKEN` through the environment, review the pending migrations,
+and use an explicit project target, for example:
+
+```bash
+npx --yes supabase db push --remote=YOUR_PROJECT_REF --skip-vault
+```
+
+Keep tokens in local credential storage; never commit them or include their
+values in deployment commands or logs.
 
 ## Ollama EmbeddingGemma configuration update
 
@@ -41,5 +56,7 @@ migration refuses to run if vectors already exist; a model change requires
 re-embedding, not numeric truncation or padding. No rows are deleted by this
 migration. The SQL fixtures now target the final 768-dimensional schema.
 
-The provider/configuration update and migration have not been tested or deployed,
-per the user's November 12, 2026 instruction. No Ollama request was made.
+The user's later instruction authorized model testing and deployment. Both
+Ollama models passed synthetic inference checks, the SQL suites passed in a
+disposable database, and the migration is deployed. These checks did not access
+real journal files or content.
