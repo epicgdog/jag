@@ -40,6 +40,8 @@ class UpdaterTests(unittest.TestCase):
             status, chunks, written = update_file(path, directory, Model(), store, coordinator=director)
             self.assertEqual(status, 'succeeded'); self.assertGreater(chunks, 1); self.assertEqual(chunks, written)
             self.assertEqual([call[0] for call in director.calls], ['chunk_file', 'embed_text', 'upsert'])
+            self.assertEqual([message['role'] for message in director.calls[1][2]],
+                             ['user', 'assistant', 'tool'])
             self.assertNotIn('PRIVATE_SENTINEL', json.dumps(director.calls))
             self.assertNotIn('private-title', json.dumps(director.calls))
             self.assertEqual(len(store.writes), 1)
@@ -91,6 +93,7 @@ class UpdaterTests(unittest.TestCase):
                 payload = json.loads(request.content)
                 self.assertEqual(payload['model'], 'qwen3.5-9b-mlx')
                 self.assertEqual(len(payload['tools']), 3)
+                self.assertEqual(payload['tool_choice'], 'required')
                 return httpx.Response(200, json={'choices': [{'finish_reason': 'tool_calls', 'message': {
                     'content': 'ignored reasoning', 'tool_calls': [{'id': 'provider', 'type': 'function',
                     'function': {'name': 'chunk_file' if valid else 'upsert', 'arguments': json.dumps(arguments)}}]}}]})

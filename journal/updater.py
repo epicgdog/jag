@@ -44,15 +44,19 @@ class UpdaterState(TypedDict, total=False):
     pending: dict
 
 
+def stage_message(stage, arguments):
+    return {'role': 'user', 'content': json.dumps({'next_tool': stage, 'arguments': arguments})}
+
+
 class Coordinator:
     def __init__(self, model): self.model = model
 
     def choose(self, stage, arguments, messages):
         data = self.model.request('POST', '/chat/completions', json={
             'model': MODEL, 'tools': TOOLS,
-            'tool_choice': {'type': 'function', 'function': {'name': stage}},
+            'tool_choice': 'required',
             'messages': [{'role': 'system', 'content': PROMPT}, *messages,
-                         {'role': 'user', 'content': json.dumps({'next_tool': stage, 'arguments': arguments})}],
+                         stage_message(stage, arguments)],
         })
         try:
             choice = data['choices'][0]
@@ -133,8 +137,11 @@ def build_updater(tools, coordinator):
 
     def execute(state):
         call = state['pending']
-        result = tools.call(call['function']['name'], json.loads(call['function']['arguments']))
-        messages = [*state.get('messages', []), {'role': 'assistant', 'tool_calls': [call]},
+        name = call['function']['name']
+        arguments = json.loads(call['function']['arguments'])
+        result = tools.call(name, arguments)
+        messages = [*state.get('messages', []), stage_message(name, arguments),
+                    {'role': 'assistant', 'content': '', 'tool_calls': [call]},
                     {'role': 'tool', 'tool_call_id': call['id'], 'content': json.dumps(result)}]
         counters = {key: value for key, value in result.items()
                     if key in ('chunk_count', 'embedded_count', 'written_count', 'status')}
