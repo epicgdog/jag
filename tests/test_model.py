@@ -12,23 +12,30 @@ class ModelTests(unittest.TestCase):
     def test_response_and_redirect(self):
         def response(payload, status=200):
             return LocalModel(client=self.client(lambda request: httpx.Response(status, json=payload)))
-        self.assertEqual(response({'choices':[{'finish_reason':'stop','message':{'content':'- Synthetic summary'}}]}).summarize('2025-01-01','Synthetic entry'), '- Synthetic summary')
+        self.assertEqual(response({'choices':[{'finish_reason':'stop','message':{'content':'Synthetic summary.'}}]}).summarize('2025-01-01','Synthetic entry'), 'Synthetic summary.')
         for payload in ({'choices':[{'finish_reason':'length','message':{'content':'- incomplete'}}]}, {'choices':[{'finish_reason':'stop','message':{'content':'<think>secret</think>'}}]}, {}):
             with self.assertRaises(JournalError): response(payload).summarize('2025-01-01','x')
         with self.assertRaises(JournalError): response({}, 302).summarize('2025-01-01','x')
 
-    def test_wrapped_and_numbered_bullets(self):
+    def test_normalizes_list_output_to_paragraph(self):
         data = {'choices': [{'finish_reason': 'stop', 'message': {'content':
             '1. Completed a synthetic task\n   and felt relieved.\n\n2) Plan to walk tomorrow.'}}]}
         self.assertEqual(validate_summary(data),
-                         '- Completed a synthetic task and felt relieved.\n- Plan to walk tomorrow.')
+                         'Completed a synthetic task and felt relieved. Plan to walk tomorrow.')
+
+    def test_plain_paragraph_and_prompt(self):
+        from journal.model import PROMPT
+        self.assertIn('one concise plain-text paragraph', PROMPT)
+        text = 'Completed a synthetic task and felt relieved.\n\nPlans a walk tomorrow.'
+        data = {'choices': [{'finish_reason': 'stop', 'message': {'content': text}}]}
+        self.assertEqual(validate_summary(data),
+                         'Completed a synthetic task and felt relieved. Plans a walk tomorrow.')
 
     def test_safe_failure_reasons(self):
         cases = [
             ('length', '- synthetic', 'model_response_truncated'),
             ('stop', '', 'model_response_empty'),
             ('stop', '<think>PRIVATE_SENTINEL</think>', 'model_response_reasoning'),
-            ('stop', 'PRIVATE_SENTINEL', 'model_response_format'),
             ('stop', '- ' + 'PRIVATE_SENTINEL ' * 121, 'model_response_too_long'),
             ('content_filter', None, 'model_response_incomplete'),
         ]
