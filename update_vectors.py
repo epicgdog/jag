@@ -7,13 +7,17 @@ from ingest_journal import SafeParser
 from journal.obsidian import JournalError
 from journal.pipeline import DEFAULT_ROOT, load_config
 from journal.updater import update_file
-from journal.vector_model import EmbeddingModel
+from journal.vector_model import EMBEDDING_MODEL, OLLAMA_ENDPOINT, EmbeddingModel
 from journal.vector_storage import VectorStorage
 
 
 def clients():
     load_config()
-    model = EmbeddingModel(os.getenv('LM_STUDIO_BASE_URL', 'http://localhost:1234/v1'))
+    model = EmbeddingModel(
+        os.getenv('OLLAMA_BASE_URL', OLLAMA_ENDPOINT),
+        embedding_endpoint=os.getenv('OLLAMA_BASE_URL', OLLAMA_ENDPOINT),
+        embedding_model=os.getenv('OLLAMA_EMBEDDING_MODEL', EMBEDDING_MODEL),
+    )
     storage = None
     try:
         model.ready()

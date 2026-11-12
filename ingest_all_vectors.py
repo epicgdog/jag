@@ -14,6 +14,7 @@ from update_vectors import clients
 SHARED = {
     'model_unavailable', 'model_redirect', 'invalid_model_endpoint',
     'embedding_model_not_loaded', 'embedding_configuration', 'embedding_context_invalid',
+    'embedding_unavailable', 'embedding_redirect', 'invalid_embedding_endpoint',
     'storage_unavailable', 'storage_configuration',
 }
 

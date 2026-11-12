@@ -27,12 +27,14 @@ class PlannerTests(unittest.TestCase):
         return PlannerModel(client=httpx.Client(transport=httpx.MockTransport(handler)))
 
     def response(self, plan=PLAN, finish='stop'):
-        return {'choices': [{'finish_reason': finish, 'message': {'content': json.dumps(plan)}}]}
+        return {'done': True, 'done_reason': finish, 'message': {'content': json.dumps(plan)}}
 
     def test_real_graph_and_local_structured_request(self):
         def inspect(payload):
             self.assertNotIn('tools', payload)
-            self.assertEqual(payload['response_format']['type'], 'json_schema')
+            self.assertEqual(payload['format']['type'], 'object')
+            self.assertFalse(payload['stream'])
+            self.assertEqual(payload['model'], 'gemma4:e4b')
             context = json.loads(payload['messages'][1]['content'])
             self.assertEqual(context['reference_date'], '2026-11-11')
             self.assertEqual(context['timezone'], 'America/Los_Angeles')

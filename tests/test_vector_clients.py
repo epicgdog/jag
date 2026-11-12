@@ -9,33 +9,28 @@ from journal.vector_model import EmbeddingModel, validate_vector
 from journal.vector_storage import VectorStorage
 
 
-VECTOR = [1.0] + [0.0] * 1023
-
-
-class Handle:
-    identifier = 'qwen3-embedding-0.6b-dwq'
-    def tokenize(self, text): return list(range(len(text)))
-    def get_context_length(self): return 128
-
-
-class SDK:
-    embedding = None
-    def __init__(self):
-        self.embedding = self
-        self.llm = type('LLMInventory', (), {'list_loaded': lambda _: [type('Model', (), {'identifier': 'qwen3.5-9b-mlx'})()]})()
-    def list_loaded(self): return [Handle()]
-    def close(self): pass
+VECTOR = [1.0] + [0.0] * 767
 
 
 class VectorClientTests(unittest.TestCase):
     def model(self, handler):
-        return EmbeddingModel(client=httpx.Client(transport=httpx.MockTransport(handler)), sdk=SDK())
+        return EmbeddingModel(client=httpx.Client(transport=httpx.MockTransport(handler)),
+                              embedding_client=httpx.Client(transport=httpx.MockTransport(handler)))
 
     def handler(self, request):
-        if request.method == 'GET':
-            return httpx.Response(200, json={'data': [{'id': 'qwen3.5-9b-mlx'}, {'id': Handle.identifier}]})
         payload = json.loads(request.content)
-        return httpx.Response(200, json={'data': [{'index': i, 'embedding': VECTOR} for i, _ in enumerate(payload['input'])]})
+        if request.url.path == '/api/show' and payload['model'] == 'gemma4:e4b':
+            return httpx.Response(200, json={'capabilities': ['completion', 'tools']})
+        if request.url.path == '/api/show':
+            self.assertEqual(str(request.url), 'http://127.0.0.1:11434/api/show')
+            self.assertEqual(payload['model'], 'embeddinggemma-2')
+            return httpx.Response(200, json={'capabilities': ['embedding'], 'model_info': {
+                'general.architecture': 'gemma3', 'gemma3.context_length': 128,
+                'gemma3.embedding_length': 768,
+            }})
+        self.assertEqual(request.url.path, '/api/embed')
+        self.assertFalse(payload['truncate'])
+        return httpx.Response(200, json={'embeddings': [VECTOR for _ in payload['input']]})
 
     def test_ready_fixed_model_and_long_file_tokenization(self):
         from journal.chunks import chunk_markdown
@@ -50,24 +45,28 @@ class VectorClientTests(unittest.TestCase):
         finally: model.close()
 
     def test_vectors_reject_wrong_dimension_nonfinite_zero_and_bool(self):
-        for vector in [[], [1, 0], [0.0] * 1024, [math.nan] + VECTOR[1:],
+        for vector in [[], [1, 0], [0.0] * 768, [math.nan] + VECTOR[1:],
                        [math.inf] + VECTOR[1:], [True] + VECTOR[1:]]:
             with self.subTest(kind=type(vector[0]).__name__ if vector else 'empty'):
                 with self.assertRaises(JournalError): validate_vector(vector)
         self.assertEqual(validate_vector([2.0] + VECTOR[1:]), VECTOR)
 
     def test_incomplete_embedding_batches_and_order(self):
-        model = self.model(lambda request: httpx.Response(200, json={'data': [{'index': 0, 'embedding': VECTOR}]}))
-        model.model_id = Handle.identifier; model.handle = Handle(); model.context_length = 128
+        model = self.model(lambda request: httpx.Response(200, json={'embeddings': [VECTOR]}))
+        model.context_length = 128
         with self.assertRaisesRegex(JournalError, 'embedding_batch_incomplete'):
             model.embed(['synthetic one', 'synthetic two'])
         model.close()
 
-    def test_no_embedding_namespace_fails_before_text_embedding(self):
-        sdk = SDK(); sdk.list_loaded = lambda: []
-        model = self.model(self.handler); model.sdk = sdk
-        with self.assertRaisesRegex(JournalError, 'embedding_model_not_loaded'): model.ready()
-        model.close()
+    def test_non_embedding_model_fails_before_text_embedding(self):
+        def handler(request):
+            return httpx.Response(200, json={'capabilities': ['completion']})
+        model = self.model(handler)
+        try:
+            with self.assertRaisesRegex(JournalError, 'embedding_configuration'):
+                model.ready()
+        finally:
+            model.close()
 
     def test_storage_checks_parent_and_complete_write(self):
         requests = []

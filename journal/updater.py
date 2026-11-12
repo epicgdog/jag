@@ -10,8 +10,8 @@ from typing import TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
-from journal.chunks import CHUNK_TOKENS, OVERLAP_TOKENS, chunk_markdown, read_snapshot
-from journal.model import MODEL
+from journal.chunks import CHUNK_BYTES, OVERLAP_BYTES, chunk_markdown, read_snapshot
+from journal.agent_model import MODEL
 from journal.obsidian import JournalError
 
 
@@ -23,7 +23,7 @@ TOOLS = [{'type': 'function', 'function': {
     },
 }} for name, description in [
     ('chunk_file', 'Read the authorized input.md and create deterministic original-text chunks.'),
-    ('embed_text', 'Embed every chunk referenced by the chunk batch handle using the fixed local model.'),
+    ('embed_text', 'Embed every chunk referenced by the chunk batch handle using the configured Ollama model.'),
     ('upsert', 'Validate and atomically persist the complete embedding batch, or validate only in dry-run mode.'),
 ]]
 PROMPT = '''You coordinate a private Markdown vector updater. Choose exactly one
@@ -97,16 +97,16 @@ class UpdaterTools:
                 self.stage = 'done'
                 return {'status': 'skipped', 'chunk_count': 0, 'written_count': 0}
             self.storage.check_document(str(self.snapshot.path), self.snapshot.body)
-            budget = min(CHUNK_TOKENS, self.model.context_length - 16)
+            budget = min(CHUNK_BYTES, self.model.context_length - 16)
             self.chunks = chunk_markdown(self.snapshot.body, self.model.count_tokens,
-                                         budget, min(OVERLAP_TOKENS, budget // 4))
+                                         budget, min(OVERLAP_BYTES, budget // 4))
             if len(self.chunks) > 10000:
                 raise JournalError('too_many_chunks')
             self.chunk_handle = secrets.token_urlsafe(18)
             self.stage = 'embed_text'
             return {'chunk_batch_handle': self.chunk_handle, 'chunk_count': len(self.chunks)}
         if name == 'embed_text':
-            # Bounded HTTP batches avoid one unbounded model request per file.
+            # Bounded HTTP batches avoid one unbounded embedding request per file.
             self.embeddings = []
             for start in range(0, len(self.chunks), 16):
                 self.embeddings.extend(self.model.embed(self.chunks[start:start + 16]))

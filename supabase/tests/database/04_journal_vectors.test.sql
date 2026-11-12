@@ -2,7 +2,7 @@ begin;
 create extension if not exists pgtap;
 select no_plan();
 create function pg_temp.v(x real, y real default 0) returns extensions.vector language sql as $$
-  select (array[x,y] || array_fill(0::real,array[1022]))::extensions.vector;
+  select (array[x,y] || array_fill(0::real,array[766]))::extensions.vector;
 $$;
 insert into public.document(source,id,document_date,content) values
   ('obsidian','/synthetic/vectors-a.md','2026-09-01','Synthetic A'),

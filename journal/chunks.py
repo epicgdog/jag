@@ -1,4 +1,4 @@
-"""Private Markdown snapshots and deterministic tokenizer-bounded chunks."""
+"""Private Markdown snapshots and deterministic chunks with an injected size bound."""
 from dataclasses import dataclass, field
 from pathlib import Path
 import re
@@ -6,9 +6,9 @@ import stat
 
 from journal.obsidian import JournalError, split_frontmatter
 
-CHUNK_VERSION = 'markdown-v1'
-CHUNK_TOKENS = 512
-OVERLAP_TOKENS = 64
+CHUNK_VERSION = 'markdown-v2-ollama-bytes'
+CHUNK_BYTES = 512
+OVERLAP_BYTES = 64
 
 
 @dataclass(repr=False)
@@ -44,8 +44,8 @@ def read_snapshot(reference, directory):
         raise JournalError('read_failed') from None
 
 
-def chunk_markdown(body, count_tokens, budget=CHUNK_TOKENS, overlap=OVERLAP_TOKENS):
-    """Return original text slices, preferring paragraph/heading boundaries."""
+def chunk_markdown(body, count_tokens, budget=CHUNK_BYTES, overlap=OVERLAP_BYTES):
+    """Return original text slices within count_tokens' bound, preferring Markdown boundaries."""
     if type(budget) is not int or type(overlap) is not int or not 0 <= overlap < budget:
         raise JournalError('chunk_configuration')
     if not body.strip():
@@ -84,7 +84,7 @@ def chunk_markdown(body, count_tokens, budget=CHUNK_TOKENS, overlap=OVERLAP_TOKE
         if end == len(body):
             break
         previous_end = end
-        # A suffix selected with the real tokenizer; avoid splitting Unicode bytes.
+        # Use the same size bound for overlap; slices never split Unicode bytes.
         suffix_start = end
         if overlap:
             low, high = start + 1, end

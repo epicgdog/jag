@@ -5,7 +5,7 @@ from pathlib import Path
 
 import httpx
 
-from journal.model import LocalModel
+from journal.agent_model import AgentModel
 from journal.obsidian import JournalError
 from journal.updater import Coordinator, UpdaterTools, update_file
 from test_vector_clients import VECTOR
@@ -91,14 +91,15 @@ class UpdaterTests(unittest.TestCase):
         for valid in [True, False]:
             def handler(request):
                 payload = json.loads(request.content)
-                self.assertEqual(payload['model'], 'qwen3.5-9b-mlx')
+                self.assertEqual(payload['model'], 'gemma4:e4b')
                 self.assertEqual(len(payload['tools']), 3)
-                self.assertEqual(payload['tool_choice'], 'required')
-                return httpx.Response(200, json={'choices': [{'finish_reason': 'tool_calls', 'message': {
-                    'content': 'ignored reasoning', 'tool_calls': [{'id': 'provider', 'type': 'function',
-                    'function': {'name': 'chunk_file' if valid else 'upsert', 'arguments': json.dumps(arguments)}}]}}]})
+                self.assertNotIn('tool_choice', payload)
+                self.assertFalse(payload['stream'])
+                return httpx.Response(200, json={'done': True, 'done_reason': 'stop', 'message': {
+                    'content': 'ignored commentary', 'thinking': 'ignored reasoning',
+                    'tool_calls': [{'function': {'name': 'chunk_file' if valid else 'upsert', 'arguments': arguments}}]}})
             with httpx.Client(transport=httpx.MockTransport(handler)) as client:
-                coordinator = Coordinator(LocalModel(client=client))
+                coordinator = Coordinator(AgentModel(client=client))
                 if valid:
                     call = coordinator.choose('chunk_file', arguments, [])
                     self.assertNotIn('ignored reasoning', json.dumps(call))

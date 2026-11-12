@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from journal.model import MODEL, LocalModel
+from journal.agent_model import MODEL, AgentModel
 from journal.obsidian import JournalError
 
 
@@ -136,7 +136,7 @@ Never include retrieval questions alongside clarification. Otherwise clarificati
 Return only JSON matching the supplied schema.'''
 
 
-class PlannerModel(LocalModel):
+class PlannerModel(AgentModel):
     def plan(self, query: str, reference_date: str, timezone: str,
              *, current_datetime: str | None = None, date_source: str = 'override') -> RetrievalPlan:
         date = dt.date.fromisoformat(reference_date)
