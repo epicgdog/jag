@@ -26,7 +26,7 @@ class VectorClientTests(unittest.TestCase):
             self.assertEqual(payload['model'], 'embeddinggemma-2')
             return httpx.Response(200, json={'capabilities': ['embedding'], 'model_info': {
                 'general.architecture': 'gemma3', 'gemma3.context_length': 128,
-                'gemma3.embedding_length': 768,
+                'gemma3.embedding_length': 512,
             }})
         self.assertEqual(request.url.path, '/api/embed')
         self.assertFalse(payload['truncate'])

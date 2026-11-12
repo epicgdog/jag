@@ -69,14 +69,14 @@ class EmbeddingModel(AgentModel):
             info = data['model_info']
             architecture = info['general.architecture']
             context = info[architecture + '.context_length']
-            dimensions = info[architecture + '.embedding_length']
             if type(context) is not int or context < 32:
                 raise JournalError('embedding_context_invalid')
-            if type(dimensions) is not int or dimensions != DIMENSIONS:
-                raise JournalError('invalid_embedding')
             self.context_length = context
         except (KeyError, TypeError, AttributeError):
             raise JournalError('embedding_configuration') from None
+        # Architecture embedding_length can differ from the final projected output.
+        # Validate the actual returned vector, using synthetic text before any files.
+        self.embed(['Synthetic embedding readiness probe.'])
 
     def count_tokens(self, text):
         """Conservative UTF-8 byte bound, not an Ollama tokenizer measurement."""
