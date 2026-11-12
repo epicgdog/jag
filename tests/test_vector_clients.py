@@ -20,7 +20,9 @@ class Handle:
 
 class SDK:
     embedding = None
-    def __init__(self): self.embedding = self
+    def __init__(self):
+        self.embedding = self
+        self.llm = type('LLMInventory', (), {'list_loaded': lambda _: [type('Model', (), {'identifier': 'qwen3.5-9b-mlx'})()]})()
     def list_loaded(self): return [Handle()]
     def close(self): pass
 

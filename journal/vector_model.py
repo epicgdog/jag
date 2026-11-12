@@ -1,7 +1,7 @@
 """Fixed local embedding model, SDK tokenization, and checked OpenAI transport."""
 import math
 
-from journal.model import LocalModel
+from journal.model import MODEL, LocalModel
 from journal.obsidian import JournalError
 
 DIMENSIONS = 1024
@@ -33,6 +33,8 @@ class EmbeddingModel(LocalModel):
             import lmstudio
             if self.sdk is None:
                 self.sdk = lmstudio.Client(api_host='localhost:1234')
+            if MODEL not in {model.identifier for model in self.sdk.llm.list_loaded()}:
+                raise JournalError('model_unavailable')
             inventory = self.request('GET', '/models')['data']
             available = {item['id'] for item in inventory}
             loaded = {handle.identifier: handle for handle in self.sdk.embedding.list_loaded()}
