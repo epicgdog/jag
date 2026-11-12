@@ -9,13 +9,16 @@ from journal.model import LocalModel
 from journal.obsidian import JournalError
 
 MODEL = 'gemma4:e4b'
-OLLAMA_ENDPOINT = 'http://127.0.0.1:11434'
+OLLAMA_ENDPOINT = 'http://localhost:11434'
 
 
 def validate_ollama_endpoint(endpoint):
     try:
         parsed = urlsplit(endpoint)
-        valid = (parsed.scheme in ('http', 'https') and parsed.hostname == '127.0.0.1'
+        configured = urlsplit(os.getenv('OLLAMA_BASE_URL', OLLAMA_ENDPOINT))
+        valid = (parsed.scheme in ('http', 'https')
+                 and (parsed.scheme, parsed.hostname, parsed.port) ==
+                     (configured.scheme, configured.hostname, configured.port)
                  and parsed.port is not None and not parsed.username and not parsed.password
                  and parsed.path in ('', '/') and not parsed.query and not parsed.fragment)
     except (TypeError, ValueError):
@@ -27,6 +30,8 @@ def validate_ollama_endpoint(endpoint):
 
 class AgentModel(LocalModel):
     def __init__(self, endpoint=None, client=None, context_budget=12000):
+        from journal.pipeline import load_config
+        load_config()
         self.endpoint = validate_ollama_endpoint(endpoint or os.getenv('OLLAMA_BASE_URL', OLLAMA_ENDPOINT))
         self.client = client or httpx.Client(timeout=120, follow_redirects=False, trust_env=False)
         self.context_budget = context_budget

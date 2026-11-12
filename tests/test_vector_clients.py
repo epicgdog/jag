@@ -1,6 +1,7 @@
 import json
 import math
 import unittest
+from unittest.mock import patch
 
 import httpx
 
@@ -13,6 +14,11 @@ VECTOR = [1.0] + [0.0] * 767
 
 
 class VectorClientTests(unittest.TestCase):
+    def setUp(self):
+        patcher = patch.dict('os.environ', {'OLLAMA_BASE_URL': 'http://localhost:11434'})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def model(self, handler):
         return EmbeddingModel(client=httpx.Client(transport=httpx.MockTransport(handler)),
                               embedding_client=httpx.Client(transport=httpx.MockTransport(handler)))
@@ -22,7 +28,7 @@ class VectorClientTests(unittest.TestCase):
         if request.url.path == '/api/show' and payload['model'] == 'gemma4:e4b':
             return httpx.Response(200, json={'capabilities': ['completion', 'tools']})
         if request.url.path == '/api/show':
-            self.assertEqual(str(request.url), 'http://127.0.0.1:11434/api/show')
+            self.assertEqual(str(request.url), 'http://localhost:11434/api/show')
             self.assertEqual(payload['model'], 'embeddinggemma-2')
             return httpx.Response(200, json={'capabilities': ['embedding'], 'model_info': {
                 'general.architecture': 'gemma3', 'gemma3.context_length': 128,

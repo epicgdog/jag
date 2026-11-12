@@ -1,5 +1,6 @@
 import json
 import unittest
+from unittest.mock import patch
 
 import httpx
 
@@ -8,11 +9,16 @@ from journal.obsidian import JournalError
 
 
 class AgentModelTests(unittest.TestCase):
+    def setUp(self):
+        patcher = patch.dict('os.environ', {'OLLAMA_BASE_URL': 'http://localhost:11434'})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_endpoint_is_restricted_to_authorized_server(self):
-        self.assertEqual(validate_ollama_endpoint('http://127.0.0.1:11434/'),
-                         'http://127.0.0.1:11434')
+        self.assertEqual(validate_ollama_endpoint('http://localhost:11434/'),
+                         'http://localhost:11434')
         for endpoint in ['http://localhost:1234/v1', 'http://example.com:11434',
-                         'http://127.0.0.1:11434?secret=x']:
+                         'http://localhost:11434?secret=x']:
             with self.assertRaises(JournalError):
                 validate_ollama_endpoint(endpoint)
 
@@ -44,6 +50,19 @@ class AgentModelTests(unittest.TestCase):
                 200, json={'capabilities': ['completion'], 'remote_host': 'https://cloud.example'}))) as client:
             with self.assertRaisesRegex(JournalError, 'model_configuration'):
                 AgentModel(client=client).ready()
+
+    def test_explicit_configuration_authorizes_only_its_origin(self):
+        with patch.dict('os.environ', {'OLLAMA_BASE_URL': 'http://192.0.2.10:11434'}):
+            self.assertEqual(validate_ollama_endpoint('http://192.0.2.10:11434'),
+                             'http://192.0.2.10:11434')
+            with self.assertRaises(JournalError):
+                validate_ollama_endpoint('http://localhost:11434')
+            from journal.vector_model import EmbeddingModel
+            with httpx.Client(transport=httpx.MockTransport(lambda request: self.fail('no network expected'))) as client:
+                model = EmbeddingModel(client=client, embedding_client=client)
+                self.assertEqual(model.embedding_endpoint, 'http://192.0.2.10:11434')
+                self.assertEqual(model.endpoint, model.embedding_endpoint)
+                model.close()
 
     def test_redirect_is_rejected(self):
         with httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(302))) as client:

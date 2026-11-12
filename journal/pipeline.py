@@ -8,7 +8,7 @@ from journal.model import LocalModel
 from journal.obsidian import JournalError, read_obsidian
 from journal.storage import Storage
 
-DEFAULT_ROOT = '/Users/your-user/Documents/vaults/main/journal'
+DEFAULT_ROOT = str(Path.home() / 'Documents/vaults/main/journal')
 
 def load_config():
     path = Path(__file__).resolve().parent.parent / '.env.local'

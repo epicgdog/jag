@@ -13,7 +13,6 @@ from typing import Any
 from notion_client import Client, NotionClientError
 
 
-DEFAULT_DATABASE_URL = "NOTION_DATABASE_URL_OR_ID"
 DEFAULT_API_VERSION = "2026-03-11"
 
 
@@ -63,22 +62,23 @@ def get_data_source_id(client: Client, database_id: str) -> str:
 
 
 def main() -> int:
+    load_env_file(Path(__file__).with_name(".env.local"))
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--database", default=DEFAULT_DATABASE_URL, help="Notion database URL or ID")
+    parser.add_argument("--database", default=os.getenv('NOTION_DATABASE_ID'), help="Notion database URL or ID")
     parser.add_argument("--page-id", help="Retrieve one page instead of listing database pages")
     parser.add_argument("--output", type=Path, help="Write JSON to this file instead of stdout")
     args = parser.parse_args()
 
-    load_env_file(Path(__file__).with_name(".env.local"))
+    if not args.page_id and not args.database:
+        parser.error('provide --database or configure NOTION_DATABASE_ID')
     token = os.environ.get("NOTION_API_KEY") or os.environ.get("NOTION_API_TOKEN")
     if not token:
         print("Missing NOTION_API_KEY in .env.local or the environment.", file=sys.stderr)
         return 2
     try:
         client = Client(auth=token, notion_version=os.getenv("NOTION_API_VERSION", DEFAULT_API_VERSION))
-        database_id = notion_id(args.database)
         result: Any = client.pages.retrieve(page_id=notion_id(args.page_id)) if args.page_id else all_pages(
-            client, get_data_source_id(client, database_id)
+            client, get_data_source_id(client, notion_id(args.database))
         )
     except (NotionClientError, RuntimeError, ValueError, KeyError) as error:
         print(f"Error: {error}", file=sys.stderr)

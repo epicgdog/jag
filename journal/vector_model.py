@@ -22,15 +22,16 @@ def validate_vector(value):
 
 
 class EmbeddingModel(AgentModel):
-    def __init__(self, *args, embedding_endpoint=OLLAMA_ENDPOINT,
+    def __init__(self, *args, embedding_endpoint=None,
                  embedding_model=EMBEDDING_MODEL, embedding_client=None, **kwargs):
-        try:
-            endpoint = validate_ollama_endpoint(embedding_endpoint)
-        except JournalError:
-            raise JournalError('invalid_embedding_endpoint') from None
         if not isinstance(embedding_model, str) or not embedding_model.strip() or any(c.isspace() for c in embedding_model):
             raise JournalError('embedding_configuration')
         super().__init__(*args, **kwargs)
+        try:
+            endpoint = validate_ollama_endpoint(embedding_endpoint or self.endpoint)
+        except JournalError:
+            self.client.close()
+            raise JournalError('invalid_embedding_endpoint') from None
         self.embedding_endpoint = endpoint
         self.model_id = embedding_model
         self.context_length = None
