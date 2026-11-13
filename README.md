@@ -74,5 +74,4 @@ uv run python ingest_all_vectors.py
 ```
 
 Vector ingestion requires matching parent documents already imported through
-the M2 journal-ingestion workflow. See [M2-USAGE.md](M2-USAGE.md) and
-[database setup](supabase/README.md).
+the journal-ingestion workflow. See [database setup](supabase/README.md).
